@@ -24,11 +24,11 @@ import (
 	"cmd/go/internal/cfg"
 	"cmd/go/internal/get"
 	"cmd/go/internal/lockedfile"
-	"cmd/go/internal/module"
-	"cmd/go/internal/note"
 	"cmd/go/internal/str"
-	"cmd/go/internal/sumweb"
 	"cmd/go/internal/web"
+	"golang.org/x/mod/module"
+	"golang.org/x/mod/sumdb"
+	"golang.org/x/mod/sumdb/note"
 )
 
 // useSumDB reports whether to use the Go checksum database for the given module.
@@ -52,15 +52,25 @@ func lookupSumDB(mod module.Version) (dbname string, lines []string, err error) 
 var (
 	dbOnce sync.Once
 	dbName string
-	db     *sumweb.Conn
+	db     *sumdb.Client
 	dbErr  error
 )
 
-func dbDial() (dbName string, db *sumweb.Conn, err error) {
+func dbDial() (dbName string, db *sumdb.Client, err error) {
 	// $GOSUMDB can be "key" or "key url",
 	// and the key can be a full verifier key
 	// or a host on our list of known keys.
-	key := strings.Fields(cfg.GOSUMDB)
+
+	// Special case: sum.golang.google.cn
+	// is an alias, reachable inside mainland China,
+	// for sum.golang.org. If there are more
+	// of these we should add a map like knownGOSUMDB.
+	gosumdb := cfg.GOSUMDB
+	if gosumdb == "sum.golang.google.cn" {
+		gosumdb = "sum.golang.org https://sum.golang.google.cn"
+	}
+
+	key := strings.Fields(gosumdb)
 	if len(key) >= 1 {
 		if k := knownGOSUMDB[key[0]]; k != "" {
 			key[0] = k
@@ -96,7 +106,7 @@ func dbDial() (dbName string, db *sumweb.Conn, err error) {
 		base = u
 	}
 
-	return name, sumweb.NewConn(&dbClient{key: key[0], name: name, direct: direct, base: base}), nil
+	return name, sumdb.NewClient(&dbClient{key: key[0], name: name, direct: direct, base: base}), nil
 }
 
 type dbClient struct {
@@ -145,7 +155,7 @@ func (c *dbClient) initBase() {
 		if proxyURL == "noproxy" {
 			continue
 		}
-		if proxyURL == "direct" {
+		if proxyURL == "direct" || proxyURL == "off" {
 			break
 		}
 		proxy, err := url.Parse(proxyURL)
@@ -217,7 +227,7 @@ func (*dbClient) WriteConfig(file string, old, new []byte) error {
 		return err
 	}
 	if len(data) > 0 && !bytes.Equal(data, old) {
-		return sumweb.ErrWriteConflict
+		return sumdb.ErrWriteConflict
 	}
 	if _, err := f.Seek(0, 0); err != nil {
 		return err
@@ -232,10 +242,10 @@ func (*dbClient) WriteConfig(file string, old, new []byte) error {
 }
 
 // ReadCache reads cached lookups or tiles from
-// GOPATH/pkg/mod/download/cache/sumdb,
+// GOPATH/pkg/mod/cache/download/sumdb,
 // which will be deleted by "go clean -modcache".
 func (*dbClient) ReadCache(file string) ([]byte, error) {
-	targ := filepath.Join(PkgMod, "download/cache/sumdb", file)
+	targ := filepath.Join(PkgMod, "cache/download/sumdb", file)
 	data, err := lockedfile.Read(targ)
 	// lockedfile.Write does not atomically create the file with contents.
 	// There is a moment between file creation and locking the file for writing,
@@ -249,7 +259,7 @@ func (*dbClient) ReadCache(file string) ([]byte, error) {
 
 // WriteCache updates cached lookups or tiles.
 func (*dbClient) WriteCache(file string, data []byte) {
-	targ := filepath.Join(PkgMod, "download/cache/sumdb", file)
+	targ := filepath.Join(PkgMod, "cache/download/sumdb", file)
 	os.MkdirAll(filepath.Dir(targ), 0777)
 	lockedfile.Write(targ, bytes.NewReader(data), 0666)
 }

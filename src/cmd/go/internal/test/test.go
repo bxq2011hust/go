@@ -507,6 +507,7 @@ var testVetFlags = []string{
 	// "-cgocall",
 	// "-composites",
 	// "-copylocks",
+	"-errorsas",
 	// "-httpresponse",
 	// "-lostcancel",
 	// "-methods",
@@ -571,8 +572,9 @@ func runTest(cmd *base.Command, args []string) {
 	}
 
 	// Pass timeout to tests if it exists.
+	// Prepend rather than appending so that it appears before positional arguments.
 	if testActualTimeout > 0 {
-		testArgs = append(testArgs, "-test.timeout="+testActualTimeout.String())
+		testArgs = append([]string{"-test.timeout=" + testActualTimeout.String()}, testArgs...)
 	}
 
 	// show passing test output (after buffering) with -v flag.
@@ -827,7 +829,7 @@ func builderTest(b *work.Builder, p *load.Package) (buildAction, runAction, prin
 	if p.ImportPath == "command-line-arguments" {
 		elem = p.Name
 	} else {
-		elem = load.DefaultExecName(p.ImportPath)
+		elem = p.DefaultExecName()
 	}
 	testBinary := elem + ".test"
 
@@ -842,7 +844,7 @@ func builderTest(b *work.Builder, p *load.Package) (buildAction, runAction, prin
 	if !cfg.BuildN {
 		// writeTestmain writes _testmain.go,
 		// using the test description gathered in t.
-		if err := ioutil.WriteFile(testDir+"_testmain.go", pmain.Internal.TestmainGo, 0666); err != nil {
+		if err := ioutil.WriteFile(testDir+"_testmain.go", *pmain.Internal.TestmainGo, 0666); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -1249,6 +1251,15 @@ func (c *runCache) tryCacheWithID(b *work.Builder, a *work.Action, id string) bo
 		return false
 	}
 
+	if a.Package.Root == "" {
+		// Caching does not apply to tests outside of any module, GOPATH, or GOROOT.
+		if cache.DebugTest {
+			fmt.Fprintf(os.Stderr, "testcache: caching disabled for package outside of module root, GOPATH, or GOROOT: %s\n", a.Package.ImportPath)
+		}
+		c.disableCache = true
+		return false
+	}
+
 	var cacheArgs []string
 	for _, arg := range testArgs {
 		i := strings.Index(arg, "=")
@@ -1436,8 +1447,8 @@ func computeTestInputsID(a *work.Action, testlog []byte) (cache.ActionID, error)
 			if !filepath.IsAbs(name) {
 				name = filepath.Join(pwd, name)
 			}
-			if !inDir(name, a.Package.Root) {
-				// Do not recheck files outside the GOPATH or GOROOT root.
+			if a.Package.Root == "" || !inDir(name, a.Package.Root) {
+				// Do not recheck files outside the module, GOPATH, or GOROOT root.
 				break
 			}
 			fmt.Fprintf(h, "stat %s %x\n", name, hashStat(name))
@@ -1445,8 +1456,8 @@ func computeTestInputsID(a *work.Action, testlog []byte) (cache.ActionID, error)
 			if !filepath.IsAbs(name) {
 				name = filepath.Join(pwd, name)
 			}
-			if !inDir(name, a.Package.Root) {
-				// Do not recheck files outside the GOPATH or GOROOT root.
+			if a.Package.Root == "" || !inDir(name, a.Package.Root) {
+				// Do not recheck files outside the module, GOPATH, or GOROOT root.
 				break
 			}
 			fh, err := hashOpen(name)

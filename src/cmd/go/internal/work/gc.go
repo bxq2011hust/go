@@ -92,8 +92,7 @@ func (gcToolchain) gc(b *Builder, a *Action, archive string, importcfg []byte, s
 	if a.buildID != "" {
 		gcargs = append(gcargs, "-buildid", a.buildID)
 	}
-	platform := cfg.Goos + "/" + cfg.Goarch
-	if p.Internal.OmitDebug || platform == "nacl/amd64p32" || cfg.Goos == "plan9" || cfg.Goarch == "wasm" {
+	if p.Internal.OmitDebug || cfg.Goos == "plan9" || cfg.Goarch == "wasm" {
 		gcargs = append(gcargs, "-dwarf=false")
 	}
 	if strings.HasPrefix(runtimeVersion, "go1") && !strings.Contains(os.Args[0], "go_bootstrap") {
@@ -306,55 +305,6 @@ func (gcToolchain) symabis(b *Builder, a *Action, sfiles []string) (string, erro
 		symabis = a.Objdir + "symabis"
 		if err := mkSymabis(p, sfiles, symabis); err != nil {
 			return "", err
-		}
-	}
-
-	// Gather known cross-package references from assembly code.
-	var otherPkgs []string
-	if p.ImportPath == "runtime" {
-		// Assembly in the following packages references
-		// symbols in runtime.
-		otherPkgs = []string{"syscall", "internal/syscall/unix", "runtime/cgo"}
-	} else if p.ImportPath == "runtime/internal/atomic" {
-		// sync/atomic is an assembly wrapper around
-		// runtime/internal/atomic.
-		otherPkgs = []string{"sync/atomic"}
-	}
-	for _, p2name := range otherPkgs {
-		p2 := load.LoadImportWithFlags(p2name, p.Dir, p, &load.ImportStack{}, nil, 0)
-		if len(p2.SFiles) == 0 {
-			continue
-		}
-
-		symabis2 := a.Objdir + "symabis2"
-		if err := mkSymabis(p2, p2.SFiles, symabis2); err != nil {
-			return "", err
-		}
-
-		// Filter out just the symbol refs and append them to
-		// the symabis file.
-		if cfg.BuildN {
-			// -x will print the lines from symabis2 that are actually appended
-			// to symabis. With -n, we don't know what those lines will be.
-			b.Showcmd("", `grep '^ref' <%s | grep -v '^ref\s*""\.' >>%s`, symabis2, a.Objdir+"symabis")
-			continue
-		}
-		abis2, err := ioutil.ReadFile(symabis2)
-		if err != nil {
-			return "", err
-		}
-		var refs bytes.Buffer
-		for _, line := range strings.Split(string(abis2), "\n") {
-			fs := strings.Fields(line)
-			if len(fs) >= 2 && fs[0] == "ref" && !strings.HasPrefix(fs[1], `"".`) {
-				fmt.Fprintf(&refs, "%s\n", line)
-			}
-		}
-		if refs.Len() != 0 {
-			symabis = a.Objdir + "symabis"
-			if err := b.appendFile(symabis, refs.Bytes()); err != nil {
-				return "", err
-			}
 		}
 	}
 

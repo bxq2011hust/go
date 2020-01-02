@@ -1,0 +1,480 @@
+<!--{
+        "Title": "Go 1.14 Release Notes",
+        "Path":  "/doc/go1.14",
+        "Template": true
+}-->
+
+<!--
+NOTE: In this document and others in this directory, the convention is to
+set fixed-width phrases with non-fixed-width spaces, as in
+<code>hello</code> <code>world</code>.
+Do not send CLs removing the interior tags from such phrases.
+-->
+
+<style>
+  main ul li { margin: 0.5em 0; }
+</style>
+
+<h2 id="introduction">DRAFT RELEASE NOTES — Introduction to Go 1.14</h2>
+
+<p>
+  <strong>
+    Go 1.14 is not yet released. These are work-in-progress
+    release notes. Go 1.14 is expected to be released in February 2020.
+  </strong>
+</p>
+
+<h2 id="language">Changes to the language</h2>
+
+<p>
+TODO
+</p>
+
+<p><!-- CL 187519 -->
+  TODO: <a href="https://golang.org/cl/187519">https://golang.org/cl/187519</a>: allow embedding overlapping interfaces
+</p>
+
+<h2 id="ports">Ports</h2>
+
+<p>
+  TODO: is Dragonfly passing? On both Dragonfly release & tip? (ABI
+  change happened) Does the net package's interface APIs work on both?
+  https://golang.org/issue/34368.
+</p>
+
+<p>
+  TODO: is Illumos up with a builder and passing?
+  https://golang.org/issue/15581.
+</p>
+
+<p>
+  TODO: announce something about the Go Solaris port? Solaris itself
+  is unmaintained? The builder is still running at Oracle, but the
+  employee who set it up left the company and we have no way to
+  maintain it.
+</p>
+
+<h3 id="darwin">Darwin</h3>
+
+<p><!-- golang.org/issue/34749 -->
+  Go 1.14 is the last Go release to support 32-bit binaries on
+  macOS (the <code>darwin/386</code> port). They are no longer
+  supported by macOS, starting with macOS 10.15 (Catalina).
+  Go continues to support the 64-bit <code>darwin/amd64</code> port.
+</p>
+
+<p><!-- golang.org/issue/34751 -->
+  Go 1.14 will likely be the last Go release to support 32-bit
+  binaries on iOS, iPadOS, watchOS, and tvOS
+  (the <code>darwin/arm</code> port). Go continues to support the
+  64-bit <code>darwin/arm64</code> port.
+</p>
+
+<h3 id="windows">Windows</h3>
+
+<p><!-- CL 203601 -->
+  Go binaries on Windows now
+  have <a href="https://docs.microsoft.com/en-us/windows/win32/memory/data-execution-prevention">DEP
+  (Data Execution Prevention)</a> enabled.
+</p>
+
+<h3 id="wasm">WebAssembly</h3>
+
+<p><!-- CL 203600 -->
+  JavaScript values referenced from Go via <code>js.Value</code>
+  objects can now be garbage collected.
+</p>
+
+<p><!-- CL 203600 -->
+  <code>js.Value</code> values can no longer be compared using
+  the <code>==</code> operator, and instead must be compared using
+  their <code>Equal</code> method.
+</p>
+
+<p><!-- CL 203600 -->
+  <code>js.Value</code> now
+  has <code>IsUndefined</code>, <code>IsNull</code>,
+  and <code>IsNaN</code> methods.
+</p>
+
+<h3 id="freebsd">FreeBSD</h3>
+
+<p><!-- CL 199919 -->
+  Go now supports the 64-bit ARM architecture on FreeBSD (the
+  <code>freebsd/arm64</code> port).
+</p>
+
+<h3 id="nacl">Native Client (NaCl)</h3>
+
+<p><!-- golang.org/issue/30439 -->
+  As <a href="go1.13#ports">announced</a> in the Go 1.13 release notes,
+  Go 1.14 drops support for the Native Client platform (<code>GOOS=nacl</code>).
+</p>
+
+<p><!-- CL 203758 -->
+  The runtime now respects zone CPU caps
+  (the <code>zone.cpu-cap</code> resource control)
+  for <code>runtime.NumCPU</code> and the default value
+  of <code>GOMAXPROCS</code>.
+</p>
+
+<h2 id="tools">Tools</h2>
+
+<p>
+TODO
+</p>
+
+<h3 id="go-command">Go command</h3>
+
+<h4 id="vendor">Vendoring</h4>
+<!-- golang.org/issue/33848 -->
+
+<p>
+  When the main module contains a top-level <code>vendor</code> directory and
+  its <code>go.mod</code> file specifies <code>go</code> <code>1.14</code> or
+  higher, the <code>go</code> command now defaults to <code>-mod=vendor</code>
+  for operations that accept that flag. A new value for that flag,
+  <code>-mod=mod</code>, causes the <code>go</code> command to instead load
+  modules from the module cache (as when no <code>vendor</code> directory is
+  present).
+</p>
+
+<p>
+  When <code>-mod=vendor</code> is set (explicitly or by default), the
+  <code>go</code> command now verifies that the main module's
+  <code>vendor/modules.txt</code> file is consistent with its
+  <code>go.mod</code> file.
+</p>
+
+<p>
+  <code>go</code> <code>list</code> <code>-m</code> no longer silently omits
+  transitive dependencies that do not provide packages in
+  the <code>vendor</code> directory. It now fails explicitly if
+  <code>-mod=vendor</code> is set.
+</p>
+
+<h4 id="go-flags">Flags</h4>
+
+<p><!-- golang.org/issue/32502, golang.org/issue/30345 -->
+  The <code>go</code> <code>get</code> command no longer accepts
+  the <code>-mod</code> flag. Previously, the flag's setting either
+  <a href="https://golang.org/issue/30345">was ignored</a> or
+  <a href="https://golang.org/issue/32502">caused the build to fail</a>.
+</p>
+
+<p><!-- golang.org/issue/33326 -->
+  <code>-mod=readonly</code> is now set by default when the <code>go.mod</code>
+  file is read-only and no top-level <code>vendor</code> directory is present.
+</p>
+
+<p><!-- golang.org/issue/31481 -->
+  <code>-modcacherw</code> is a new flag that instructs the <code>go</code>
+  command to leave newly-created directories in the module cache at their
+  default permissions rather than making them read-only.
+  The use of this flag makes it more likely that tests or other tools will
+  accidentally add files not included in the module's verified checksum.
+  However, it allows the use of <code>rm</code> <code>-rf</code>
+  (instead of <code>go</code> <code>clean</code> <code>-modcache</code>)
+  to remove the module cache.
+</p>
+
+<p><!-- golang.org/issue/34506 -->
+  <code>-modfile=file</code> is a new flag that instructs the <code>go</code>
+  command to read (and possibly write) an alternate go.mod file instead of the
+  one in the module root directory. A file named "go.mod" must still be present
+  in order to determine the module root directory, but it is not
+  accessed. When <code>-modfile</code> is specified, an alternate go.sum file
+  is also used: its path is derived from the <code>-modfile</code> flag by
+  trimming the ".mod" extension and appending ".sum".
+</p>
+
+<h4 id="incompatible-versions"><code>+incompatible</code> versions</h4>
+<!-- golang.org/issue/34165 -->
+
+<p>
+  If the latest version of a module contains a <code>go.mod</code> file,
+  <code>go</code> <code>get</code> will no longer upgrade to an
+  <a href="/cmd/go/#hdr-Module_compatibility_and_semantic_versioning">incompatible</a>
+  major version of that module unless such a version is requested explicitly
+  or is already required.
+  <code>go</code> <code>list</code> also omits incompatible major versions
+  for such a module when fetching directly from version control, but may
+  include them if reported by a proxy.
+</p>
+
+
+<h4 id="go.mod"><code>go.mod</code> file maintenance</h4>
+<!-- golang.org/issue/34822 -->
+
+<p>
+  <code>go</code> commands other than
+  <code>go</code> <code>mod</code> <code>tidy</code> no longer
+  remove a <code>require</code> directive that specifies a version of an indirect dependency
+  that is already implied by other (transitive) dependencies of the main
+  module.
+</p>
+
+<p>
+  <code>go</code> commands other than
+  <code>go</code> <code>mod</code> <code>tidy</code> no longer
+  edit the <code>go.mod</code> file if the changes are only cosmetic.
+</p>
+
+<p>
+  When <code>-mod=readonly</code> is set, <code>go</code> commands will no
+  longer fail due to a missing <code>go</code> directive or erroneous
+  <code>// indirect</code> comment.
+</p>
+
+<h4 id="module-downloading">Module downloading</h4>
+
+<p><!-- golang.org/issue/26092 -->
+  The <code>go</code> command now supports Subversion repositories in module mode.
+</p>
+
+<p><!-- golang.org/issue/30748 -->
+  The <code>go</code> command now includes snippets of plain-text error messages
+  from module proxies and other HTTP servers.
+  An error message will only be shown if it is valid UTF-8 and consists of only
+  graphic characters and spaces.
+</p>
+
+<h2 id="runtime">Runtime</h2>
+
+<p><!-- CL 190098 -->
+  This release improves the performance of most uses
+  of <code>defer</code> to incur almost zero overhead compared to
+  calling the deferred function directly.
+  As a result, <code>defer</code> can now be used in
+  performance-critical code without overhead concerns.
+</p>
+
+<p><!-- CL 201760, CL 201762 and many others -->
+  Goroutines are now asynchronously preemptible.
+  As a result, loops without function calls no longer potentially
+  deadlock the scheduler or significantly delay garbage collection.
+  This is supported on all platforms except <code>windows/arm</code>,
+  <code>darwin/arm</code>, <code>js/wasm</code>, and
+  <code>plan9/*</code>.
+</p>
+
+<p>
+  A consequence of the implementation of preemption is that on Unix
+  systems, including Linux and macOS systems, programs built with Go
+  1.14 will receive more signals than programs built with earlier
+  releases.
+  This means that programs that use packages
+  like <a href="/pkg/syscall/"><code>syscall</code></a>
+  or <a href="https://godoc.org/golang.org/x/sys/unix"><code>golang.org/x/sys/unix</code></a>
+  will see more slow system calls fail with <code>EINTR</code> errors.
+  Those programs will have to handle those errors in some way, most
+  likely looping to try the system call again.  For more
+  information about this
+  see <a href="http://man7.org/linux/man-pages/man7/signal.7.html"><code>man
+  7 signal</code></a> for Linux systems or similar documentation for
+  other systems.
+</p>
+
+<p><!-- CL 201765, CL 195701 and many others -->
+  The page allocator is more efficient and incurs significantly less
+  lock contention at high values of <code>GOMAXPROCS</code>.
+  This is most noticeable as lower latency and higher throughput for
+  large allocations being done in parallel and at a high rate.
+</p>
+
+<p><!-- CL 171844 and many others -->
+  Internal timers, used by
+  <a href="/pkg/time/#After"><code>time.After</code></a>,
+  <a href="/pkg/time/#Tick"><code>time.Tick</code></a>,
+  <a href="/pkg/net/#Conn"><code>net.Conn.SetDeadline</code></a>,
+  and friends, are more efficient, with less lock contention and fewer
+  context switches.
+  This is a performance improvement that should not cause any user
+  visible changes.
+</p>
+
+<!-- TODO: Maybe CL 200439? -->
+
+<h2 id="compiler">Compiler</h2>
+
+<p><!-- CL 162237 -->
+  This release adds <code>-d=checkptr</code> as a compile-time option
+  for adding instrumentation to check that Go code is following
+  <code>unsafe.Pointer</code> safety rules dynamically.
+  This option is enabled by default with the <code>-race</code>
+  or <code>-msan</code> flags, and can be disabled
+  with <code>-gcflags=-all=-d=checkptr=0</code>.
+  Specifically, <code>-d=checkptr</code> checks the following:
+</p>
+
+<ol>
+  <li>
+    When converting <code>unsafe.Pointer</code> to <code>*T</code>,
+    the resulting pointer must be aligned appropriately
+    for <code>T</code>.
+  </li>
+  <li>
+    If the result of pointer arithmetic points into a Go heap object,
+    one of the <code>unsafe.Pointer</code>-typed operands must point
+    into the same object.
+  </li>
+</ol>
+
+<p><!-- CL 204338 -->
+  The compiler can now emit machine-readable logs of key optimizations
+  using the <code>-json</code> flag, including inlining, escape
+  analysis, bounds-check elimination, and nil-check elimination
+</p>
+
+<p><!-- CL 196959 -->
+  Detailed escape analysis diagnostics (<code>-m=2</code>) now work again.
+  This had been dropped from the new escape analysis implementation in
+  the previous release.
+</p>
+
+<p><!-- CL 196217 -->
+  All Go symbols in macOS binaries now begin with an underscore,
+  following platform conventions.
+</p>
+
+<p><!-- CL 202117 -->
+  This release includes experimental support for compiler-inserted
+  coverage instrumentation for fuzzing.
+  See <a href="https://golang.org/issue/14565">the issue</a> for more
+  details.
+  This API may change in future releases.
+</p>
+
+<h2 id="library">Core library</h2>
+
+<p>
+TODO
+</p>
+
+<dl id="hash/maphash"><dt><a href="/pkg/hash/maphash">hash/maphash</a></dt>
+  <dd>
+    <p><!-- CL 186877 -->
+      TODO: <a href="https://golang.org/cl/186877">https://golang.org/cl/186877</a>: add hashing package for bytes and strings
+    </p>
+
+</dl><!-- hash/maphash -->
+
+<dl id="crypto/tls"><dt><a href="/pkg/crypto/tls/">crypto/tls</a></dt>
+  <dd>
+    <p><!-- CL 191976 -->
+      TODO: <a href="https://golang.org/cl/191976">https://golang.org/cl/191976</a>: remove SSLv3 support
+    </p>
+
+    <p><!-- CL 191999 -->
+      TODO: <a href="https://golang.org/cl/191999">https://golang.org/cl/191999</a>: remove TLS 1.3 opt-out
+    </p>
+
+    <p><!-- CL 174329 -->
+      The <code>tls</code> package no longer supports NPN and now only
+      supports ALPN. In previous releases it supported both. There are
+      no API changes and code should function identically as before.
+      Most other clients & servers have already removed NPN support in
+      favor of the standardized ALPN.
+    </p>
+
+</dl><!-- crypto/tls -->
+
+<dl id="encoding/asn1"><dt><a href="/pkg/encoding/asn1/">encoding/asn1</a></dt>
+  <dd>
+    <p><!-- CL 126624 -->
+      TODO: <a href="https://golang.org/cl/126624">https://golang.org/cl/126624</a>: handle ASN1&#39;s string type BMPString
+    </p>
+
+</dl><!-- encoding/asn1 -->
+
+<dl id="mime"><dt><a href="/pkg/mime/">mime</a></dt>
+  <dd>
+    <p><!-- CL 186927 -->
+      TODO: <a href="https://golang.org/cl/186927">https://golang.org/cl/186927</a>: update type of .js and .mjs files to text/javascript
+    </p>
+
+</dl><!-- mime -->
+
+<dl id="math"><dt><a href="/pkg/math/">math</a></dt>
+  <dd>
+    <p><!-- CL 127458 -->
+      The new <a href="/pkg/math/#FMA"><code>FMA</code></a> function
+      computes <code>x*y+z</code> in floating point with no
+      intermediate rounding of the <code>x*y</code>
+      computation. Several architectures implement this computation
+      using dedicated hardware instructions for additional performance.
+    </p>
+
+</dl><!-- math -->
+
+<dl id="plugin"><dt><a href="/pkg/plugin/">plugin</a></dt>
+  <dd>
+    <p><!-- CL 191617 -->
+      The <code>plugin</code> package now supports <code>freebsd/amd64</code>.
+    </p>
+
+</dl><!-- plugin -->
+
+<dl id="reflect">
+
+<dt><a href="/pkg/reflect/">reflect</a></dt>
+  <dd>
+    <p><!-- CL 85661 -->
+      <a href="/pkg/reflect#StructOf"><code>StructOf</code></a> now
+      supports creating struct types with unexported fields, by
+      setting the <code>PkgPath</code> field in
+      a <code>StructField</code> element.
+    </p>
+
+</dl><!-- reflect -->
+
+<dl id="runtime"><dt><a href="/pkg/runtime/">runtime</a></dt>
+  <dd>
+    <p><!-- CL 200081 -->
+      <code>runtime.Goexit</code> can no longer be aborted by a
+      recursive <code>panic</code>/<code>recover</code>.
+    </p>
+
+    <p><!-- CL 188297, CL 191785 -->
+      On macOS, <code>SIGPIPE</code> is no longer forwarded to signal
+      handlers installed before the Go runtime is initialized.
+      This is necessary because macOS delivers <code>SIGPIPE</code>
+      <a href="https://golang.org/issue/33384">to the main thread</a>
+      rather than the thread writing to the closed pipe.
+    </p>
+
+</dl><!-- runtime -->
+
+<dl id="signal"><dt><a href="/pkg/signal/">signal</a></dt>
+  <dd>
+    <p><!-- CL 187739 -->
+      On Windows,
+      the <code>CTRL_CLOSE_EVENT</code>, <code>CTRL_LOGOFF_EVENT</code>,
+      and <code>CTRL_SHUTDOWN_EVENT</code> events now generate
+      a <code>syscall.SIGTERM</code> signal, similar to how Control-C
+      and Control-Break generate a <code>syscall.SIGINT</code> signal.
+    </p>
+
+</dl><!-- signal -->
+
+<dl id="testing"><dt><a href="/pkg/testing/">testing</a></dt>
+  <dd>
+    <p><!-- CL 201359 -->
+       The testing package now supports cleanup functions, called after
+       a test or benchmark has finished, by calling
+       <a href="/pkg/testing#T.Cleanup"><code>T.Cleanup</code></a> or
+       <a href="/pkg/testing#B.Cleanup"><code>B.Cleanup</code></a> respectively.
+    </p>
+</dl><!-- testing -->
+
+<h3 id="minor_library_changes">Minor changes to the library</h3>
+
+<p>
+  As always, there are various minor changes and updates to the library,
+  made with the Go 1 <a href="/doc/go1compat">promise of compatibility</a>
+  in mind.
+</p>
+
+<p>
+TODO
+</p>

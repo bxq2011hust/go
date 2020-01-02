@@ -11,6 +11,10 @@ import (
 	"unsafe"
 )
 
+// Export some functions via linkname to assembly in sync/atomic.
+//go:linkname Xchg
+//go:linkname Xchguintptr
+
 type spinlock struct {
 	v uint32
 }
@@ -204,6 +208,9 @@ func Xchg64(addr *uint64, v uint64) uint64
 
 //go:noescape
 func Load64(addr *uint64) uint64
+
+//go:noescape
+func Store8(addr *uint8, v uint8)
 
 //go:noescape
 func Store64(addr *uint64, v uint64)

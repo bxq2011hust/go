@@ -22,6 +22,7 @@ import (
 	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
+	urlpkg "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -217,9 +218,11 @@ type Request struct {
 	// Transport.DisableKeepAlives were set.
 	Close bool
 
-	// For server requests, Host specifies the host on which the URL
-	// is sought. Per RFC 7230, section 5.4, this is either the value
-	// of the "Host" header or the host name given in the URL itself.
+	// For server requests, Host specifies the host on which the
+	// URL is sought. For HTTP/1 (per RFC 7230, section 5.4), this
+	// is either the value of the "Host" header or the host name
+	// given in the URL itself. For HTTP/2, it is the value of the
+	// ":authority" pseudo-header field.
 	// It may be of the form "host:port". For international domain
 	// names, Host may be in Punycode or Unicode form. Use
 	// golang.org/x/net/idna to convert it to either format if
@@ -237,12 +240,12 @@ type Request struct {
 	Host string
 
 	// Form contains the parsed form data, including both the URL
-	// field's query parameters and the POST or PUT form data.
+	// field's query parameters and the PATCH, POST, or PUT form data.
 	// This field is only available after ParseForm is called.
 	// The HTTP client ignores Form and uses Body instead.
 	Form url.Values
 
-	// PostForm contains the parsed form data from POST, PATCH,
+	// PostForm contains the parsed form data from PATCH, POST
 	// or PUT body parameters.
 	//
 	// This field is only available after ParseForm is called.
@@ -347,8 +350,8 @@ func (r *Request) Context() context.Context {
 // sending the request, and reading the response headers and body.
 //
 // To create a new request with a context, use NewRequestWithContext.
-// To change the context of a request (such as an incoming) you then
-// also want to modify to send back out, use Request.Clone. Between
+// To change the context of a request, such as an incoming request you
+// want to modify before sending back out, use Request.Clone. Between
 // those two uses, it's rare to need WithContext.
 func (r *Request) WithContext(ctx context.Context) *Request {
 	if ctx == nil {
@@ -450,7 +453,7 @@ func (r *Request) Referer() string {
 
 // multipartByReader is a sentinel value.
 // Its presence in Request.MultipartForm indicates that parsing of the request
-// body has been handed off to a MultipartReader instead of ParseMultipartFrom.
+// body has been handed off to a MultipartReader instead of ParseMultipartForm.
 var multipartByReader = &multipart.Form{
 	Value: make(map[string][]string),
 	File:  make(map[string][]*multipart.FileHeader),
@@ -763,7 +766,7 @@ func removeZone(host string) string {
 	return host[:j] + host[i:]
 }
 
-// ParseHTTPVersion parses a HTTP version string.
+// ParseHTTPVersion parses an HTTP version string.
 // "HTTP/1.0" returns (1, 0, true).
 func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 	const Big = 1000000 // arbitrary upper bound
@@ -848,7 +851,7 @@ func NewRequestWithContext(ctx context.Context, method, url string, body io.Read
 	if ctx == nil {
 		return nil, errors.New("net/http: nil Context")
 	}
-	u, err := parseURL(url) // Just url.Parse (url is shadowed for godoc).
+	u, err := urlpkg.Parse(url)
 	if err != nil {
 		return nil, err
 	}
@@ -1165,9 +1168,7 @@ func (l *maxBytesReader) Close() error {
 
 func copyValues(dst, src url.Values) {
 	for k, vs := range src {
-		for _, value := range vs {
-			dst.Add(k, value)
-		}
+		dst[k] = append(dst[k], vs...)
 	}
 }
 

@@ -59,7 +59,7 @@ TEXT asmsyscall6<>(SB),NOSPLIT,$256
 	CMP	R6, R3
 	BNE	skiperrno
 
-    // Save errno in libcall
+	// Save errno in libcall
 	BL	runtime·load_g(SB)
 	MOVD	g_m(g), R4
 	MOVD	(m_mOS + mOS_perrno)(R4), R9
@@ -258,8 +258,8 @@ TEXT runtime·exit1(SB),NOSPLIT,$0-4
 	CSYSCALL()
 	RET
 
-// Runs on OS stack, called from runtime·write.
-TEXT runtime·write1(SB),NOSPLIT,$0-28
+// Runs on OS stack, called from runtime·write1.
+TEXT runtime·write2(SB),NOSPLIT,$0-28
 	MOVD	fd+0(FP), R3
 	MOVD	p+8(FP), R4
 	MOVW	n+16(FP), R5

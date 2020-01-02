@@ -72,7 +72,8 @@ import (
 // use. If the map is nil, Unmarshal allocates a new map. Otherwise Unmarshal
 // reuses the existing map, keeping existing entries. Unmarshal then stores
 // key-value pairs from the JSON object into the map. The map's key type must
-// either be a string, an integer, or implement encoding.TextUnmarshaler.
+// either be any string type, an integer, implement json.Unmarshaler, or
+// implement encoding.TextUnmarshaler.
 //
 // If a JSON value is not appropriate for a given target type,
 // or if a JSON number overflows the target type, Unmarshal
@@ -197,66 +198,6 @@ func (n Number) Float64() (float64, error) {
 // Int64 returns the number as an int64.
 func (n Number) Int64() (int64, error) {
 	return strconv.ParseInt(string(n), 10, 64)
-}
-
-// isValidNumber reports whether s is a valid JSON number literal.
-func isValidNumber(s string) bool {
-	// This function implements the JSON numbers grammar.
-	// See https://tools.ietf.org/html/rfc7159#section-6
-	// and https://json.org/number.gif
-
-	if s == "" {
-		return false
-	}
-
-	// Optional -
-	if s[0] == '-' {
-		s = s[1:]
-		if s == "" {
-			return false
-		}
-	}
-
-	// Digits
-	switch {
-	default:
-		return false
-
-	case s[0] == '0':
-		s = s[1:]
-
-	case '1' <= s[0] && s[0] <= '9':
-		s = s[1:]
-		for len(s) > 0 && '0' <= s[0] && s[0] <= '9' {
-			s = s[1:]
-		}
-	}
-
-	// . followed by 1 or more digits.
-	if len(s) >= 2 && s[0] == '.' && '0' <= s[1] && s[1] <= '9' {
-		s = s[2:]
-		for len(s) > 0 && '0' <= s[0] && s[0] <= '9' {
-			s = s[1:]
-		}
-	}
-
-	// e or E followed by an optional - or + and
-	// 1 or more digits.
-	if len(s) >= 2 && (s[0] == 'e' || s[0] == 'E') {
-		s = s[1:]
-		if s[0] == '+' || s[0] == '-' {
-			s = s[1:]
-			if s == "" {
-				return false
-			}
-		}
-		for len(s) > 0 && '0' <= s[0] && s[0] <= '9' {
-			s = s[1:]
-		}
-	}
-
-	// Make sure we are at the end.
-	return s == ""
 }
 
 // decodeState represents the state while decoding a JSON value.
@@ -492,8 +433,9 @@ func (d *decodeState) valueQuoted() interface{} {
 
 // indirect walks down v allocating pointers as needed,
 // until it gets to a non-pointer.
-// if it encounters an Unmarshaler, indirect stops and returns that.
-// if decodingNull is true, indirect stops at the last pointer so it can be set to nil.
+// If it encounters an Unmarshaler, indirect stops and returns that.
+// If decodingNull is true, indirect stops at the first settable pointer so it
+// can be set to nil.
 func indirect(v reflect.Value, decodingNull bool) (Unmarshaler, encoding.TextUnmarshaler, reflect.Value) {
 	// Issue #24153 indicates that it is generally not a guaranteed property
 	// that you may round-trip a reflect.Value by calling Value.Addr().Elem()
@@ -532,7 +474,7 @@ func indirect(v reflect.Value, decodingNull bool) (Unmarshaler, encoding.TextUnm
 			break
 		}
 
-		if v.Elem().Kind() != reflect.Ptr && decodingNull && v.CanSet() {
+		if decodingNull && v.CanSet() {
 			break
 		}
 
@@ -848,14 +790,14 @@ func (d *decodeState) object(v reflect.Value) error {
 			kt := t.Key()
 			var kv reflect.Value
 			switch {
-			case kt.Kind() == reflect.String:
-				kv = reflect.ValueOf(key).Convert(kt)
 			case reflect.PtrTo(kt).Implements(textUnmarshalerType):
 				kv = reflect.New(kt)
 				if err := d.literalStore(item, kv, true); err != nil {
 					return err
 				}
 				kv = kv.Elem()
+			case kt.Kind() == reflect.String:
+				kv = reflect.ValueOf(key).Convert(kt)
 			default:
 				switch kt.Kind() {
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -1024,6 +966,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			}
 			v.SetBytes(b[:n])
 		case reflect.String:
+			if v.Type() == numberType && !isValidNumber(string(s)) {
+				return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
+			}
 			v.SetString(string(s))
 		case reflect.Interface:
 			if v.NumMethod() == 0 {
@@ -1044,10 +989,9 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		switch v.Kind() {
 		default:
 			if v.Kind() == reflect.String && v.Type() == numberType {
+				// s must be a valid number, because it's
+				// already been tokenized.
 				v.SetString(s)
-				if !isValidNumber(s) {
-					return fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item)
-				}
 				break
 			}
 			if fromQuoted {
@@ -1251,6 +1195,7 @@ func getu4(s []byte) rune {
 
 // unquote converts a quoted JSON string literal s into an actual string t.
 // The rules are different than for Go, so cannot use strconv.Unquote.
+// The first byte in s must be '"'.
 func (d *decodeState) unquote(s []byte) (t string, ok bool) {
 	s, ok = d.unquoteBytes(s)
 	t = string(s)
@@ -1258,13 +1203,17 @@ func (d *decodeState) unquote(s []byte) (t string, ok bool) {
 }
 
 func (d *decodeState) unquoteBytes(s []byte) (t []byte, ok bool) {
-	r := d.safeUnquote
-	// The bytes have been scanned, so we know that the first and last bytes
-	// are double quotes.
+	// We already know that s[0] == '"'. However, we don't know that the
+	// closing quote exists in all cases, such as when the string is nested
+	// via the ",string" option.
+	if len(s) < 2 || s[len(s)-1] != '"' {
+		return
+	}
 	s = s[1 : len(s)-1]
 
 	// If there are no unusual characters, no unquoting is needed, so return
 	// a slice of the original bytes.
+	r := d.safeUnquote
 	if r == -1 {
 		return s, true
 	}

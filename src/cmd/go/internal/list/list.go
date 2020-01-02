@@ -211,7 +211,7 @@ applied to a Go struct, but now a Module struct:
         Main      bool         // is this the main module?
         Indirect  bool         // is this module only an indirect dependency of main module?
         Dir       string       // directory holding files for this module, if any
-        GoMod     string       // path to go.mod file for this module, if any
+        GoMod     string       // path to go.mod file used when loading this module, if any
         GoVersion string       // go version used in module
         Error     *ModuleError // error loading module
     }
@@ -219,6 +219,9 @@ applied to a Go struct, but now a Module struct:
     type ModuleError struct {
         Err string // the error itself
     }
+
+The file GoMod refers to may be outside the module directory if the
+module is in the module cache or if the -modfile flag is used.
 
 The default output is to print the module path and then
 information about the version and replacement if any.
@@ -287,7 +290,7 @@ For more about modules, see 'go help modules'.
 
 func init() {
 	CmdList.Run = runList // break init cycle
-	work.AddBuildFlags(CmdList)
+	work.AddBuildFlags(CmdList, work.DefaultBuildFlags)
 }
 
 var (
@@ -384,13 +387,29 @@ func runList(cmd *base.Command, args []string) {
 		if modload.Init(); !modload.Enabled() {
 			base.Fatalf("go list -m: not using modules")
 		}
+
+		modload.InitMod() // Parses go.mod and sets cfg.BuildMod.
+		if cfg.BuildMod == "vendor" {
+			for _, arg := range args {
+				// In vendor mode, the module graph is incomplete: it contains only the
+				// explicit module dependencies and the modules that supply packages in
+				// the import graph. Reject queries that imply more information than that.
+				if arg == "all" {
+					base.Fatalf("go list -m: can't compute 'all' using the vendor directory\n\t(Use -mod=mod or -mod=readonly to bypass.)")
+				}
+				if strings.Contains(arg, "...") {
+					base.Fatalf("go list -m: can't match module patterns using the vendor directory\n\t(Use -mod=mod or -mod=readonly to bypass.)")
+				}
+			}
+		}
+
 		modload.LoadBuildList()
 
 		mods := modload.ListModules(args, *listU, *listVersions)
 		if !*listE {
 			for _, m := range mods {
 				if m.Error != nil {
-					base.Errorf("go list -m %s: %v", m.Path, m.Error.Err)
+					base.Errorf("go list -m: %v", m.Error.Err)
 				}
 			}
 			base.ExitIfErrors()
@@ -459,7 +478,7 @@ func runList(cmd *base.Command, args []string) {
 				}
 				if pmain != nil {
 					pkgs = append(pkgs, pmain)
-					data := pmain.Internal.TestmainGo
+					data := *pmain.Internal.TestmainGo
 					h := cache.NewHash("testmain")
 					h.Write([]byte("testmain\n"))
 					h.Write(data)

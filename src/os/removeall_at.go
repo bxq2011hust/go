@@ -153,7 +153,6 @@ func removeAllFrom(parent *File, base string) error {
 
 	// Remove the directory itself.
 	unlinkError := unix.Unlinkat(parentFd, base, unix.AT_REMOVEDIR)
-	unlinkError = removeAllTestHook(unlinkError)
 	if unlinkError == nil || IsNotExist(unlinkError) {
 		return nil
 	}
@@ -173,7 +172,7 @@ func openFdAt(dirfd int, name string) (*File, error) {
 	var r int
 	for {
 		var e error
-		r, e = unix.Openat(dirfd, name, O_RDONLY, 0)
+		r, e = unix.Openat(dirfd, name, O_RDONLY|syscall.O_CLOEXEC, 0)
 		if e == nil {
 			break
 		}

@@ -71,8 +71,9 @@ func init() {
 		help.HelpImportPath,
 		modload.HelpModules,
 		modget.HelpModuleGet,
+		modfetch.HelpModuleAuth,
+		modfetch.HelpModulePrivate,
 		help.HelpPackages,
-		modfetch.HelpSum,
 		test.HelpTestflag,
 		test.HelpTestfunc,
 	}
@@ -90,7 +91,7 @@ func main() {
 	}
 
 	if args[0] == "get" || args[0] == "help" {
-		if modload.Init(); !modload.Enabled() {
+		if !modload.WillBeEnabled() {
 			// Replace module-aware get with GOPATH get if appropriate.
 			*modget.CmdGet = *get.CmdGet
 		}

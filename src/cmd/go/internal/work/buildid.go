@@ -15,7 +15,6 @@ import (
 	"cmd/go/internal/base"
 	"cmd/go/internal/cache"
 	"cmd/go/internal/cfg"
-	"cmd/go/internal/load"
 	"cmd/go/internal/str"
 	"cmd/internal/buildid"
 )
@@ -203,8 +202,9 @@ func (b *Builder) toolID(name string) string {
 		// On the development branch, use the content ID part of the build ID.
 		id = contentID(f[len(f)-1])
 	} else {
-		// For a release, the output is like: "compile version go1.9.1". Use the whole line.
-		id = f[2]
+		// For a release, the output is like: "compile version go1.9.1 X:framepointer".
+		// Use the whole line.
+		id = strings.TrimSpace(line)
 	}
 
 	b.id.Lock()
@@ -291,14 +291,19 @@ func (b *Builder) gccgoToolID(name, language string) (string, error) {
 				exe = lp
 			}
 		}
-		if _, err := os.Stat(exe); err != nil {
-			return "", fmt.Errorf("%s: can not find compiler %q: %v; output %q", name, exe, err, out)
+		id, err = buildid.ReadFile(exe)
+		if err != nil {
+			return "", err
 		}
-		id = b.fileHash(exe)
+
+		// If we can't find a build ID, use a hash.
+		if id == "" {
+			id = b.fileHash(exe)
+		}
 	}
 
 	b.id.Lock()
-	b.toolIDCache[name] = id
+	b.toolIDCache[key] = id
 	b.id.Unlock()
 
 	return id, nil
@@ -415,7 +420,7 @@ func (b *Builder) fileHash(file string) string {
 // during a's work. The caller should defer b.flushOutput(a), to make sure
 // that flushOutput is eventually called regardless of whether the action
 // succeeds. The flushOutput call must happen after updateBuildID.
-func (b *Builder) useCache(a *Action, p *load.Package, actionHash cache.ActionID, target string) bool {
+func (b *Builder) useCache(a *Action, actionHash cache.ActionID, target string) bool {
 	// The second half of the build ID here is a placeholder for the content hash.
 	// It's important that the overall buildID be unlikely verging on impossible
 	// to appear in the output by chance, but that should be taken care of by
